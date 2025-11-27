@@ -1,0 +1,18 @@
+# 1. Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate   # Windows
+# OR
+source venv/bin/activate   # Linux/Mac
+
+# 2. Upgrade pip
+pip install --upgrade pip
+
+# 3. Install all dependencies from requirements.txt
+pip install -r requirements.txt
+
+
+# Start FastAPI backend
+uvicorn app:app --reload
+
+# In another terminal, start Streamlit frontend
+streamlit run incident_app.py

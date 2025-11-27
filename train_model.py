@@ -1,33 +1,80 @@
-import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+# train_model.py
+import math
 import joblib
+import pandas as pd
+from sqlalchemy.orm import Session
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
 
-# Example: load your incident data
-# Replace with your actual CSV file
-df = pd.read_csv("incidents_raw.csv", parse_dates=["created_at", "resolved_at"])
+from db_config import SessionLocal, Incident, Group
 
-# Create target variable
-df["resolution_hours"] = (df["resolved_at"] - df["created_at"]).dt.total_seconds() / 3600
-df = df.dropna(subset=["resolution_hours"])
+def hours_between(a, b):
+    if not a or not b:
+        return None
+    diff = (b - a).total_seconds() / 3600.0
+    return diff if diff >= 0 else None
 
-# Simple features
-df["hour"] = df["created_at"].dt.hour
-df["dayofweek"] = df["created_at"].dt.dayofweek
-df["title_len"] = df["title"].fillna("").str.len()
+def fetch_training_data():
+    db: Session = SessionLocal()
+    try:
+        # Use only incidents with a closed_at to compute resolution time
+        incidents = db.query(Incident).filter(Incident.closed_at.isnot(None)).all()
+        rows = []
+        for i in incidents:
+            group_name = i.assigned_group.name if i.assigned_group else "Unknown"
+            rt_hours = hours_between(i.created_at, i.closed_at)
+            if rt_hours is None:
+                continue
+            rows.append({
+                "title": i.title or "",
+                "description": i.description or "",
+                "group": group_name or "",
+                # Optional: derive type. If you have explicit type field, replace this.
+                "type": infer_type(i.title, i.description),
+                "resolution_time_hours": rt_hours
+            })
+        return pd.DataFrame(rows)
+    finally:
+        db.close()
 
-X = df[["hour", "dayofweek", "title_len"]]
-y = df["resolution_hours"]
+def infer_type(title, description):
+    text = f"{title} {description}".lower()
+    if "network" in text or "vpn" in text or "wifi" in text:
+        return "Network"
+    if "server" in text or "database" in text or "db" in text:
+        return "Infra"
+    if "bug" in text or "error" in text or "ui" in text or "app" in text:
+        return "Software"
+    return "General"
 
-# Train/test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+def main():
+    df = fetch_training_data()
+    if df.empty:
+        print("❌ No closed incidents with resolution times found. Train after you have historical data.")
+        return
 
-# Train model
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+    X = df[["title", "description", "group", "type"]]
+    y = df["resolution_time_hours"]
 
-# Save model + feature list in the same folder
-joblib.dump(model, "incident_time_model.joblib")
-joblib.dump(list(X.columns), "feature_list.joblib")
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("desc", TfidfVectorizer(max_features=1000), "description"),
+            ("title", TfidfVectorizer(max_features=300), "title"),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), ["group", "type"]),
+        ]
+    )
 
-print("✅ Model saved successfully in F:\\incident_app")
+    model = Pipeline([
+        ("prep", preprocessor),
+        ("reg", RandomForestRegressor(n_estimators=300, random_state=42))
+    ])
+
+    model.fit(X, y)
+    joblib.dump(model, "resolution_model.pkl")
+    print(f"✅ Trained on {len(df)} incidents, saved to resolution_model.pkl")
+
+if __name__ == "__main__":
+    main()
