@@ -1,1 +1,11 @@
-\bi
+fastapi==0.115.0
+uvicorn==0.32.0
+sqlalchemy==2.0.36
+pydantic==2.9.2
+streamlit==1.39.0
+requests==2.32.3
+scikit-learn==1.5.2
+joblib==1.4.2
+pandas==2.2.3
+alembic==1.13.2
+aiosqlite==0.20.0

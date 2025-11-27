@@ -1,0 +1,7 @@
+User
+email : lakshman.yerasingu@gmail.com
+pas : lucky
+
+Analyst 
+email : Amani@gmail.com
+pass : amani

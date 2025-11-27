@@ -1,0 +1,8 @@
+#errors 
+1. could not import module API 
+ERROR:    Error loading ASGI app. Could not import module "api".
+
+4(index):1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+API error: Expecting value: line 1 column 1 (char 0)
+
+the above error is due to Foriegn key issue in sql code
