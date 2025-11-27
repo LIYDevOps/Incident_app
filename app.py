@@ -1,43 +1,58 @@
 import streamlit as st
-import pandas as pd
-import joblib
-from datetime import datetime
+import requests
 
-# Load model
-model = joblib.load("incident_time_model.joblib")
-feature_list = joblib.load("feature_list.joblib")
+st.set_page_config(page_title="Auth System", layout="wide")
 
-st.title("Incident Resolution Time Predictor")
+# Top navigation buttons
+col1, col2, col3 = st.columns([6, 1, 1])
+with col2:
+    if st.button("Login"):
+        st.session_state["page"] = "login"
+with col3:
+    if st.button("Sign Up"):
+        st.session_state["page"] = "signup"
 
-# Input fields
-title = st.text_input("Issue Title")
-description = st.text_area("Issue Description")
-category = st.selectbox("Category", ["Network", "Database", "Application", "Security", "Other"])
-priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"])
-team = st.selectbox("Team", ["Ops", "DBA", "Dev", "Security", "Unassigned"])
-created_at = st.text_input("Created At (YYYY-MM-DD HH:MM)", datetime.now().strftime("%Y-%m-%d %H:%M"))
+# Default page
+if "page" not in st.session_state:
+    st.session_state["page"] = "signup"
 
-# Prediction button
-if st.button("Predict Resolution Time"):
-    row = {
-        "created_at": pd.to_datetime(created_at),
-        "title": title,
-        "description": description,
-        "category": category,
-        "priority": priority,
-        "team": team,
-    }
-    df_single = pd.DataFrame([row])
+# ---------------- SIGN UP PAGE ----------------
+if st.session_state["page"] == "signup":
+    st.title("🔐 Sign Up Page")
 
-    # Feature engineering
-    df_single["hour"] = df_single["created_at"].dt.hour
-    df_single["dayofweek"] = df_single["created_at"].dt.dayofweek
-    df_single["month"] = df_single["created_at"].dt.month
-    df_single["is_weekend"] = df_single["dayofweek"].isin([5, 6]).astype(int)
-    df_single["title_len"] = df_single["title"].str.len()
-    df_single["desc_len"] = df_single["description"].str.len()
+    username = st.text_input("Username")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-    X = df_single[[c for c in feature_list if c in df_single.columns]]
-    pred_hours = float(model.predict(X)[0])
+    if st.button("Submit Sign Up"):
+        data = {"username": username, "email": email, "password": password}
+        try:
+            response = requests.post("http://127.0.0.1:8000/signup", json=data)
+            if response.status_code == 200:
+                result = response.json()
+                st.success(f"{result['message']} (User: {result['user']})")
+            else:
+                st.error(response.json()["detail"])
+                st.info("👉 Please login instead.")
+                st.session_state["page"] = "login"
+        except Exception as e:
+            st.error(f"Failed to connect to API: {e}")
 
-    st.success(f"Predicted resolution time: {pred_hours:.2f} hours")
+# ---------------- LOGIN PAGE ----------------
+elif st.session_state["page"] == "login":
+    st.title("🔑 Login Page")
+
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Submit Login"):
+        data = {"email": email, "password": password}
+        try:
+            response = requests.post("http://127.0.0.1:8000/login", json=data)
+            if response.status_code == 200:
+                result = response.json()
+                st.success(f"{result['message']} (User: {result['user']})")
+            else:
+                st.error(response.json()["detail"])
+        except Exception as e:
+            st.error(f"Failed to connect to API: {e}")
